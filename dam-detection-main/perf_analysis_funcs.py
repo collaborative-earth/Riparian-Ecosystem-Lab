@@ -9,11 +9,11 @@ import os
 import sklearn.metrics as skm
 
 
-loss_dir = './nets/losses/'
-fv_dir = './nets/firstvals/'
+loss_dir = './output/nets/losses/'
+fv_dir = './output/nets/firstvals/'
 
-model_dir='./nets/'
-fig_dir = './figs/' 
+model_dir='./output/nets/'
+fig_dir = './output/figs/'
 
 
 

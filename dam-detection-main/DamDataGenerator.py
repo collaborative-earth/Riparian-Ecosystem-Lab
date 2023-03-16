@@ -9,7 +9,7 @@ import os
 
 class DataGenerator(keras.utils.Sequence):
     'Generates data for Keras'
-    def __init__(self, batch_size=512, imsize=(256,256,4), shuffle_seed=444, noise_std = 0, data_path='./images/', test=False,val=True,RGBN=[0,1,2,3],loc=None):
+    def __init__(self, batch_size=512, imsize=(256,256,4), shuffle_seed=444, noise_std = 0, data_path='./data/images/', test=False,val=True,RGBN=[0,1,2,3],loc=None):
  
         self.test = test
         self.imsize=imsize

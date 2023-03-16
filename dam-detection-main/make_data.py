@@ -7,12 +7,12 @@ import pickle
 #Takes folders with .tifs and creates test and train folders of .npys
 
 #to store npy images:
-im_direct = './images/'
-testim_direct = './images/test_images/'
-trainim_direct = './images/train_images/'
+im_direct = './data/images/'
+testim_direct = './data/images/test_images/'
+trainim_direct = './data/images/train_images/'
 
 #to load tifs:
-base_path = './NAIP/'
+base_path = './data/NAIP/'
 #folders representing different image locations within the base_path:
 folders = ['CHIPS_01_Wyoming_BeaverDam_Lengths','CHIPS_02_WyomingDams','CHIPS_03_OregonDams_shp','CHIPS_04_IdahoDams_shp','CHIPS_05_ColoradoDams_shp','CHIPS_06_CaliforniaDams_shp']
 
