@@ -7,13 +7,12 @@ import tensorflow as tf
 from DamDataGenerator import DataGenerator
 
 
-def train(
+def train_model(
         model: tf.keras.Model,
         data_generator: DataGenerator,
         model_type: str,
         training_params: dict,
         output_path: Path = Path("./output"),
-        save_first_vals: bool = False
 ):
     loss = training_params["loss"]
     learning_rate = training_params["learning_rate"]
@@ -29,27 +28,26 @@ def train(
     )
 
     optimizer = get_optimizer(optimizer_kind, learning_rate_fn)
-    model = model.compile(optimizer=optimizer, loss=loss)
+    model.compile(optimizer=optimizer, loss=loss)
 
-    net_name = model_type + str(uuid.uuid1())
-    print('Training Supervised Network: ')
-    print(net_name)
+    net_name = f"{model_type}_{str(uuid.uuid1())}"
+    print(f"Training {net_name}")
 
     model_output_path = output_path / net_name
     model_output_path.mkdir(parents=True)
 
-    if save_first_vals:
-        first_val = model.evaluate(val_images, val_labels, verbose=1)
-        npy_path = str((model_output_path / "firstval.npy").absolute())
-        np.save(npy_path, first_val)
+    first_val = model.evaluate(val_images, val_labels, verbose=1)
+    npy_path = str((model_output_path / "firstval.npy").absolute())
+    np.save(npy_path, first_val)
 
     log_output_path = model_output_path / "losses.csv"
     csv_logger = tf.keras.callbacks.CSVLogger(log_output_path, append=True, separator=';')
     model.fit(data_generator, verbose=2, epochs=epochs, steps_per_epoch=batch_per_epoch,
               validation_data=(val_images, val_labels), validation_steps=None, validation_freq=1,
               callbacks=[csv_logger])
+    print(f"Saving model to {model_output_path}")
     model.save(model_output_path / "model")
-    return model
+    return model, model_output_path
 
 
 def get_optimizer(opt, learning_rate_fn):
@@ -64,7 +62,3 @@ def get_optimizer(opt, learning_rate_fn):
     elif opt == 'adagrad':
         optimizer = tf.keras.optimizers.Adagrad(learning_rate=learning_rate_fn)
     return optimizer
-
-
-if __name__ == '__main__':
-    print("HelloWorld")
