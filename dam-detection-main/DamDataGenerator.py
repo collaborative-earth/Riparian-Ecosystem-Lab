@@ -13,9 +13,9 @@ import os
 class DataGenerator(keras.utils.Sequence):
     """Generates data for Keras"""
 
-    def __init__(self, batch_size=512, imsize=(256, 256, 4), shuffle_seed=444, noise_std=0,
-                 data_path: Path = Path('./data/images/'),
-                 test=False, val=True, RGBN=[0, 1, 2, 3], loc=None):
+    def __init__(self, data_path: Path,
+                 batch_size=512, imsize=(256, 256, 4), shuffle_seed=444, noise_std=0,
+                 test=False, val=True, dev=False, RGBN=[0, 1, 2, 3], loc=None):
 
         self.test = test
         self.imsize = imsize
@@ -41,6 +41,8 @@ class DataGenerator(keras.utils.Sequence):
         else:
             train_ids_path = data_path / "trainims_inds.npy"
             im_IDs = np.load(str(train_ids_path.absolute()))
+            if dev:
+                im_IDs = im_IDs[:2 * batch_size]
             self.im_path = data_path / 'train_images'
             if loc is not None:
                 with Path(data_path, "train_dictionary.pkl").open('rb') as f:
@@ -64,7 +66,10 @@ class DataGenerator(keras.utils.Sequence):
 
     def __len__(self):
         """Denotes the number of batches per epoch"""
-        return int(np.floor(self.num_ims / self.batch_size))
+        n_batches = int(np.floor(self.num_ims / self.batch_size))
+        if self.num_ims % self.batch_size != 0:
+            n_batches += 1
+        return n_batches
 
     def get_loc_im_IDs(self, im_IDs, loc, im_dict):
         new_inds = []
@@ -80,12 +85,8 @@ class DataGenerator(keras.utils.Sequence):
 
     def get_testbatch(self, index=0):
         if self.test:
-            if self.batch_size * (index + 1) <= self.num_ims:
-                X, y = self.__data_generation(self.im_IDs[self.batch_size * index:self.batch_size * (index + 1)])
-                return X[:, :, :, self.RGBN], y
-            else:
-                print('Exceeds number of test images')  # todo: make this an error message
-                return None
+            X, y = self.__data_generation(self.im_IDs[self.batch_size * index:self.batch_size * (index + 1)])
+            return X[:, :, :, self.RGBN], y
         else:
             print('Test set not loaded')  # todo: make this an error message
             return None
@@ -116,11 +117,12 @@ class DataGenerator(keras.utils.Sequence):
     def __data_generation(self, list_IDs_temp):
         """Generates data containing batch_size samples"""  # X : (n_samples, *dim, n_channels)
         # Initialization
-        X = np.zeros((self.batch_size,) + self.imsize)
-        y = np.zeros(self.batch_size, dtype=int)
+        curr_batch_size = min(self.batch_size, len(list_IDs_temp))
+        X = np.zeros((curr_batch_size,) + self.imsize)
+        y = np.zeros(curr_batch_size, dtype=int)
 
         noise = np.random.randn(X.shape[0], X.shape[1], X.shape[2], X.shape[3]) * self.noise_std
-        noise[np.random.choice(self.batch_size, size=(int(self.batch_size * .45)), replace=False), :, :, :] = 0
+        noise[np.random.choice(curr_batch_size, size=(int(curr_batch_size * .45)), replace=False), :, :, :] = 0
 
         # training set mean and std
         r = [0.4023569156422335, 0.16273552077138295]

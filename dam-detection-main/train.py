@@ -3,6 +3,7 @@ from pathlib import Path
 
 import numpy as np
 import tensorflow as tf
+from keras.losses import BinaryCrossentropy
 
 from DamDataGenerator import DataGenerator
 
@@ -18,6 +19,7 @@ def train_model(
     learning_rate = training_params["learning_rate"]
     optimizer_kind = training_params["optimizer"]
     epochs = training_params["epochs"]
+    class_weights = training_params.get("class_weight", None)
 
     val_images, val_labels = data_generator.get_valbatch()
 
@@ -44,7 +46,11 @@ def train_model(
     csv_logger = tf.keras.callbacks.CSVLogger(log_output_path, append=True, separator=';')
     model.fit(data_generator, verbose=2, epochs=epochs, steps_per_epoch=batch_per_epoch,
               validation_data=(val_images, val_labels), validation_steps=None, validation_freq=1,
-              callbacks=[csv_logger])
+              class_weight=class_weights,
+              callbacks=[
+                  csv_logger,
+                  # early_stopping
+              ])
     print(f"Saving model to {model_output_path}")
     model.save(model_output_path / "model")
     return model, model_output_path

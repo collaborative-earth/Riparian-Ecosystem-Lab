@@ -40,7 +40,7 @@ def plot_training(model_output_dir: Path):
     plt.close()
 
 
-def do_perf_analysis(model: tf.keras.Model, model_output_path: Path, batch_size: int = 1200):
+def do_perf_analysis(model: tf.keras.Model, test_data_generator: data.DataGenerator, model_output_path: Path, batch_size: int = 1200):
     net_name = model_output_path.stem
     if 'Nir' in net_name:
         RGBN = 3
@@ -52,12 +52,22 @@ def do_perf_analysis(model: tf.keras.Model, model_output_path: Path, batch_size:
     # gamma = float(filename.split('_gm')[1].split('_')[0])
     # , custom_objects={ 'binary_focal_loss_fixed': floss.binary_focal_loss(alpha=alpha, gamma=gamma) })
 
-    data_generator = data.DataGenerator(batch_size=batch_size, test=True, RGBN=RGBN)
-    inputs, labels = data_generator.get_testbatch()  # #__getitem__(1) #
-    loss = model.evaluate(inputs, labels, verbose=0)
+    outputs = []
+    labels = []
+    n_samples = 0
+    overall_accuracy = 0
+    for i in range(len(test_data_generator)):
+        curr_batch_inputs, curr_batch_labels = test_data_generator.get_testbatch(i)
+        overall_accuracy = model.evaluate(curr_batch_inputs, curr_batch_labels, verbose=0) * len(curr_batch_labels)
+        n_samples += len(curr_batch_labels)
+        curr_batch_outputs = model(curr_batch_inputs, training=False)
+        outputs.append(curr_batch_outputs)
+        labels.extend(curr_batch_labels)
+    labels = np.array(labels)
+    loss = overall_accuracy / n_samples
     print("Test loss for " + net_name + ' is ' + str(loss))
 
-    outputs = model(inputs, training=False).numpy()
+    outputs = np.vstack(outputs)
     fpr, tpr, threshold = skm.roc_curve(labels, outputs)
     plt.plot(fpr, tpr)
     plt.title(skm.roc_auc_score(labels, outputs))

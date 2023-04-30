@@ -1,15 +1,6 @@
-import os
-
-import numpy as np
 import tensorflow as tf
-from keras import Model
+from keras import Model, layers, models
 
-# import focalloss_funcs as floss
-
-import DamDataGenerator as data
-
-save_dir = './output/nets/'
-loss_dir = './output/nets/losses/'
 
 def build_model(options: dict) -> Model:
     model_type = options["model_type"]
@@ -23,9 +14,23 @@ def build_model(options: dict) -> Model:
     return model
 
 
-def build_resnet(num_channels=[16, 32, 64], num_blocks=[2, 2, 2], l2_reg=None, reg=None, inits='glorot_uniform',
-                 last_layer=True, input_shape=(256, 256, 4), fl_size=7, dense=128, output_dim=1, activation='sigmoid'):
+def build_resnet(
+        num_channels=[16, 32, 64],
+        num_blocks=[2, 2, 2],
+        l2_reg=None,
+        reg=None,
+        inits='glorot_uniform',
+        last_layer=True,
+        input_shape=(256, 256, 4),
+        fl_size=7,
+        dense=128,
+        output_dim=1,
+        activation='sigmoid',
+        data_augmentation=False
+):
     inputs = tf.keras.Input(shape=input_shape)
+    if data_augmentation:
+        inputs = add_data_augmentation(inputs)
     if isinstance(inits, float):
         weight_inits = tf.keras.initializers.TruncatedNormal(stddev=inits)
     else:
@@ -71,11 +76,24 @@ def build_resnet(num_channels=[16, 32, 64], num_blocks=[2, 2, 2], l2_reg=None, r
     return model
 
 
-def build_fullyconv(num_channels=[16, 16, 32, 64], num_blocks=[1, 1, 1, 1], l2_reg=None, reg=None,
-                    inits='glorot_uniform', last_layer=True, input_shape=(None, None, 4), fl_size=3, dense=128,
-                    output_dim=1, activation='sigmoid'):
+def build_fullyconv(
+        num_channels=[16, 16, 32, 64],
+        num_blocks=[1, 1, 1, 1],
+        l2_reg=None,
+        reg=None,
+        inits='glorot_uniform',
+        last_layer=True,
+        input_shape=(None, None, 4),
+        fl_size=3,
+        dense=128,
+        output_dim=1,
+        activation='sigmoid',
+        data_augmentation = False
+):
     # will still train with 266x266 as the output of data generator, but can run test images one at a time with dif sizes
     inputs = tf.keras.Input(shape=input_shape)
+    if data_augmentation:
+        inputs = add_data_augmentation(inputs)
     if isinstance(inits, float):
         weight_inits = tf.keras.initializers.TruncatedNormal(stddev=inits)
     else:
@@ -121,6 +139,15 @@ def build_fullyconv(num_channels=[16, 16, 32, 64], num_blocks=[1, 1, 1, 1], l2_r
     return model
 
 
+def add_data_augmentation(inputs):
+    print("applying data augmentation")
+    inputs = layers.RandomFlip("horizontal")(inputs)
+    inputs = layers.RandomRotation(0.25)(inputs)
+    inputs = layers.RandomTranslation(height_factor=0.1, width_factor=0.1, fill_mode="reflect")(inputs)
+    inputs = layers.RandomContrast(factor=0.3)(inputs)
+    return inputs
+
+
 def add_FC_layer(outputs, units, activation=None, use_bias=False, inits='glorot_uniform'):
     if isinstance(inits, float):
         weight_inits = tf.keras.initializers.TruncatedNormal(stddev=inits)
@@ -145,61 +172,6 @@ def get_optimizer(opt, learning_rate_fn):
     return optimizer
 
 
-def binary_classifier_net(model_num, batch_size=256, save=True, epochs=20, l2_reg=None, inits='glorot_uniform', reg=None,
-                          LR=.001, opt='adam', dense=128, noise_std=.2):
-    output_dim = 1
-    net_name = 'FC_' + model_num
-    act_f = 'sigmoid'
-    loss = "binary_crossentropy";
-    # alpha=.5; gamma=0
-    # loss=[floss.binary_focal_loss(alpha=alpha, gamma=gamma)]
-
-    # load pre-trained model if it exists:
-    try:
-        net_name_load = [f for f in os.listdir(loss_dir) if net_name in f][0][:-10]
-        model = tf.keras.models.load_model(save_dir+net_name_load)
-        print(model.summary())
-        print('Pre-trained model loaded')
-        reloaded = True
-        net_name = net_name_load
-        LR = LR/10 #assuming starting farther in
-
-    except:
-        net_name += '_L2' + str(l2_reg) + '_IN' + str(inits) + '_ar' + str(reg) + '_lr' + str(LR) + '_OP' + str(
-            opt) + '_Ns' + str(noise_std)  # +'_al'+str(alpha)+'_gm'+str(gamma)+'_'
-        reloaded = False
-        # inputs, outputs = build_resnet(l2_reg=l2_reg,inits=inits,reg=reg,num_channels=[32,32,64,64,32],num_blocks=[1,2,2,2,1], fl_size=3,dense=dense)
-        inputs, outputs = build_fullyconv(l2_reg=l2_reg, inits=inits, reg=reg, num_channels=[16, 16, 32, 32, 64],
-                                          num_blocks=[1, 1, 1, 1, 1])
-        outputs = add_FC_layer(outputs, output_dim, activation=act_f, use_bias=True, inits=inits)
-        model = tf.keras.Model(inputs, outputs)
-        print(model.summary())
-
-        # setting up training
-        DataGen = data.DataGenerator(batch_size, noise_std=noise_std)
-        val_im, val_lab = DataGen.get_valbatch()
-
-        # learning_rate_fn = LR
-        # can use schedule after looking at initial curves
-        learning_rate_fn = tf.keras.optimizers.schedules.PiecewiseConstantDecay(
-            [10 * (DataGen.batch_per_epoch), 20 * (DataGen.batch_per_epoch)], [LR, LR / 10, LR / 100])
-
-        optimizer = get_optimizer(opt, learning_rate_fn)
-        model.compile(optimizer=optimizer, loss=loss)
-
-        print('Training Supervised Network: ')
-        print(net_name)
-
-        csv_logger = tf.keras.callbacks.CSVLogger(loss_dir + net_name + 'Losses.csv', append=True, separator=';')
-        if not reloaded:
-            first_val = model.evaluate(val_im, val_lab, verbose=1)
-            np.save(save_dir + 'firstvals/' + net_name + 'Firstval.npy', first_val)
-
-        # train model
-        early_stopping = tf.keras.callbacks.EarlyStopping(monitor='val_loss', patience=1)
-        model.fit(DataGen, verbose=2, epochs=epochs, steps_per_epoch=DataGen.batch_per_epoch,
-                  validation_data=(val_im, val_lab), validation_steps=None, validation_freq=1,
-                  callbacks=[csv_logger])  # early_stopping
-
-        if save:
-            model.save(save_dir + net_name)
+def load_pretrained_model(pretrained_model_path):
+    model = models.load_model(pretrained_model_path)
+    return model
